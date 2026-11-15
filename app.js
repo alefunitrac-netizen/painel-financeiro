@@ -36,6 +36,19 @@ const pct = (v) => `${String(Math.round(v * 10) / 10).replace(".", ",")}%`;
 const dataCurta = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 const MESES_CURTOS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 const rotuloMes = (iso) => `${MESES_CURTOS[Number(iso.slice(5, 7)) - 1]}/${iso.slice(2, 4)}`;
+/** "2026-11" + n meses. */
+const somarMes = (mes, n) => {
+  const [a, m] = mes.split("-").map(Number);
+  const t = a * 12 + (m - 1) + n;
+  return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, "0")}`;
+};
+const mesesEntre = (de, ate) => {
+  const [a1, m1] = de.split("-").map(Number), [a2, m2] = ate.split("-").map(Number);
+  return (a2 * 12 + m2) - (a1 * 12 + m1);
+};
+const mesHoje = () => estado.dados.hoje.slice(0, 7);
+/** Parcelas que faltam (contando a deste mês) até o último mês do desconto. */
+const parcelasRestantes = (ateMes) => (ateMes ? Math.max(0, mesesEntre(mesHoje(), ateMes) + 1) : "");
 
 function toast(texto) {
   const t = document.createElement("div");
@@ -146,6 +159,35 @@ function linhaSimples(valores, cor = "var(--azul)") {
     <defs><linearGradient id="gradL" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${cor}" stop-opacity=".2"/><stop offset="1" stop-color="${cor}" stop-opacity="0"/></linearGradient></defs>
     <path d="M0,${A} L${pts.replaceAll(" ", " L")} L${L},${A} Z" fill="url(#gradL)"/>
     <polyline points="${pts}" fill="none" stroke="${cor}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
+function graficoRenda(meses) {
+  if (meses.length < 2) return "";
+  const L = 320, A = 80, vals = meses.map((m) => m.liquido);
+  const max = Math.max(...vals), min = Math.min(...vals), faixa = max - min || max * 0.1;
+  const lo = min - faixa * 1.2, hi = max + faixa * 0.15;
+  const x = (i) => (i / (meses.length - 1)) * L;
+  const y = (v) => A - ((v - lo) / (hi - lo)) * A;
+  let d = `M0,${y(vals[0]).toFixed(1)}`;
+  vals.forEach((v, i) => { if (i) d += ` H${x(i).toFixed(1)} V${y(v).toFixed(1)}`; });
+  return `<svg viewBox="-4 -6 ${L + 8} ${A + 12}" width="100%" height="110" preserveAspectRatio="none" aria-hidden="true">
+    <defs><linearGradient id="gradR" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="var(--verde)" stop-opacity=".22"/><stop offset="1" stop-color="var(--verde)" stop-opacity="0"/></linearGradient></defs>
+    <path d="${d} H${L} V${A} H0 Z" fill="url(#gradR)"/>
+    <path d="${d} H${L}" fill="none" stroke="var(--verde)" stroke-width="3" stroke-linejoin="round"/></svg>
+    <div class="sub" style="display:flex;justify-content:space-between">
+      <span>${rotuloMes(meses[0].mes + "-01")} · <b style="color:var(--texto)">${reaisCurto(vals[0])}</b></span>
+      <span>${rotuloMes(meses.at(-1).mes + "-01")} · <b class="verde-txt">${reaisCurto(vals.at(-1))}</b></span></div>`;
+}
+
+function blocoRendaFutura(f, liquidoAgora) {
+  if (!f || !f.marcos.length) return "";
+  const final = f.marcos.at(-1).liquido;
+  return `${graficoRenda(f.meses)}
+    ${f.marcos.map((m) => `<div class="linha"><span class="icone-cat" style="background:var(--verde-claro)">📈</span>
+      <span class="nome">A partir de <b>${rotuloMes(m.mes + "-01")}</b> <span class="sub">· fim de ${esc(m.nomes.join(", ") || "parcela")}</span></span>
+      <span class="valor verde-txt">+${reais(m.aumento)}</span></div>`).join("")}
+    <div class="sub" style="margin-top:8px">Seu líquido vai de <b>${reais(liquidoAgora)}</b> para <b class="verde-txt">${reais(final)}</b>
+      (${pct(((final - liquidoAgora) / liquidoAgora) * 100)} a mais) quando as parcelas acabarem.</div>`;
 }
 
 // ---------- Estado e navegação ----------
@@ -290,6 +332,11 @@ function telaVisao(d) {
         ${d.previsao.meses.slice(0, 2).map((m) => `<div><div class="mini-rotulo">Sobra prevista ${rotuloMes(m.mes)}</div>
           <div class="mini-valor ${m.sobra < 0 ? "vermelho-txt" : "verde-txt"}">${reais(m.sobra)}</div></div>`).join("")}</div>` : ""}
     </section>
+
+    ${d.renda.futura?.marcos.length ? `<section class="cartao c12">
+      <h2>Sua renda nos próximos meses <a class="acao" href="#/renda">Editar parcelas</a></h2>
+      ${blocoRendaFutura(d.renda.futura, d.renda.liquido)}
+    </section>` : ""}
   </div>`;
 }
 
@@ -315,12 +362,16 @@ function telaRenda(d) {
         <div class="campo"><label for="irrf">Imposto de renda ${cfg.regime === "clt" ? '<span class="sub">(vazio = calcular)</span>' : ""}</label><input class="entrada" id="irrf" inputmode="decimal" placeholder="${cfg.regime === "clt" ? "automático" : "0,00"}" value="${paraCampo(cfg.irrfManual)}"></div>
       </div>
       <div class="campo"><label>Outros descontos do contracheque</label>
-        <div id="descontos">${cfg.descontos.map((x, i) => `<div class="form-linha" style="grid-template-columns:2fr 1fr auto;margin-bottom:8px">
-          <input class="entrada" data-desc-nome="${i}" value="${esc(x.nome)}" placeholder="Ex.: Vale-transporte">
+        ${cfg.descontos.length ? `<div class="form-linha sub" style="grid-template-columns:2fr 1fr 1fr auto;margin-bottom:4px">
+          <span>Descrição</span><span>Valor por mês</span><span>Parcelas restantes</span><span style="width:36px"></span></div>` : ""}
+        <div id="descontos">${cfg.descontos.map((x, i) => `<div class="form-linha" style="grid-template-columns:2fr 1fr 1fr auto;margin-bottom:8px">
+          <input class="entrada" data-desc-nome="${i}" value="${esc(x.nome)}" placeholder="Ex.: Empréstimo consignado">
           <input class="entrada" data-desc-valor="${i}" inputmode="decimal" value="${paraCampo(x.valorCentavos)}" placeholder="0,00">
+          <input class="entrada" data-desc-parc="${i}" type="number" min="1" max="120" value="${parcelasRestantes(x.ateMes)}" placeholder="fixo" title="Quantas parcelas faltam, contando a deste mês. Vazio = desconto fixo.">
           <button class="botao-icone" data-remover-desc="${i}" aria-label="Remover">${icone("lixo")}</button></div>`).join("")}</div>
         <div><button class="botao secundario" data-acao="add-desconto">${icone("mais", 'width="16" height="16"')} Desconto</button></div>
       </div>
+      <div class="sub" style="margin-bottom:6px">Em <b>Parcelas restantes</b>, coloque quantas faltam contando a deste mês (ex.: empréstimo consignado). Deixe vazio para descontos fixos, como o vale-transporte.</div>
       <div class="sub" style="margin-bottom:14px">Tabelas de 2026 (INSS progressivo; IR isento até R$ 5.000 com redução até R$ 7.350). Se o contracheque mostrar outro valor, digite-o no campo.</div>
       <button class="botao" data-acao="salvar-renda">Salvar salário</button>
     </section>
@@ -330,10 +381,11 @@ function telaRenda(d) {
       ${h ? `<div class="linha"><span class="nome">Salário bruto</span><span class="valor">${reais(h.bruto)}</span></div>
         <div class="linha"><span class="nome">INSS</span><span class="valor neg">−${reais(h.inss)}</span></div>
         <div class="linha"><span class="nome">Imposto de renda</span><span class="valor neg">−${reais(h.irrf)}</span></div>
-        ${h.outros.map((o) => `<div class="linha"><span class="nome">${esc(o.nome)}</span><span class="valor neg">−${reais(o.valorCentavos)}</span></div>`).join("")}
+        ${h.outros.map((o) => `<div class="linha"><span class="nome">${esc(o.nome)}${o.ateMes ? ` <span class="sub">· até ${rotuloMes(o.ateMes + "-01")} (${parcelasRestantes(o.ateMes)}x)</span>` : ""}</span><span class="valor neg">−${reais(o.valorCentavos)}</span></div>`).join("")}
         <div class="linha total"><span class="nome"><b>Líquido</b></span><span class="valor verde-txt">${reais(h.liquido)}</span></div>
         <div class="sub" style="margin-top:8px">${h.bruto ? `Descontos: ${pct((h.totalDescontos / h.bruto) * 100)} do bruto · ` : ""}${h.origemImpostos === "calculado" ? "INSS e IR calculados" : "valores do contracheque"}</div>`
         : `<div class="vazio">Digite o salário bruto para ver o líquido.</div>`}
+      ${h && (estado.futura ?? d.renda.futura)?.marcos.length ? `<h2 style="margin-top:20px">Quando as parcelas acabarem</h2>${blocoRendaFutura(estado.futura ?? d.renda.futura, h.liquido)}` : ""}
     </section>
 
     <section class="cartao c12">
@@ -476,10 +528,14 @@ function lerFormRenda() {
   if (document.getElementById("dep")) f.dependentes = Math.max(0, Math.min(20, Number(val("dep")) || 0));
   f.inssManual = lerReais(val("inss"));
   f.irrfManual = lerReais(val("irrf"));
-  f.descontos = f.descontos.map((x, i) => ({
-    nome: document.querySelector(`[data-desc-nome="${i}"]`)?.value.trim() || x.nome,
-    valorCentavos: lerReais(document.querySelector(`[data-desc-valor="${i}"]`)?.value) ?? 0,
-  }));
+  f.descontos = f.descontos.map((x, i) => {
+    const parc = Number(document.querySelector(`[data-desc-parc="${i}"]`)?.value) || 0;
+    return {
+      nome: document.querySelector(`[data-desc-nome="${i}"]`)?.value.trim() || x.nome,
+      valorCentavos: lerReais(document.querySelector(`[data-desc-valor="${i}"]`)?.value) ?? 0,
+      ateMes: parc > 0 ? somarMes(mesHoje(), Math.min(parc, 120) - 1) : null,
+    };
+  });
   return f;
 }
 const corpoRenda = (f) => ({ ...f, descontos: f.descontos.filter((x) => x.nome && x.valorCentavos > 0) });
@@ -490,7 +546,9 @@ function recalcularRenda() {
   calculando = setTimeout(async () => {
     const f = lerFormRenda();
     try {
-      estado.holerite = (await api("/calcular-renda", { metodo: "POST", corpo: corpoRenda(f) })).holerite;
+      const r = await api("/calcular-renda", { metodo: "POST", corpo: corpoRenda(f) });
+      estado.holerite = r.holerite;
+      estado.futura = r.futura;
       const foco = document.activeElement?.id;
       const pos = document.activeElement?.selectionStart;
       desenhar();
@@ -506,7 +564,7 @@ function recalcularRenda() {
 async function acao(nome, alvo) {
   try {
     switch (nome) {
-      case "atualizar": estado.formRenda = null; estado.holerite = null; return carregar();
+      case "atualizar": estado.formRenda = null; estado.holerite = null; estado.futura = null; return carregar();
       case "mes-anterior": estado.mes = mesDeslocado(-1); return carregar();
       case "mes-seguinte": estado.mes = mesDeslocado(1); return carregar();
       case "sair":
@@ -518,7 +576,8 @@ async function acao(nome, alvo) {
       case "salvar-renda": {
         alvo.disabled = true;
         const r = await api("/renda", { metodo: "PUT", corpo: corpoRenda(lerFormRenda()) });
-        estado.holerite = r.holerite;
+        estado.holerite = null;
+        estado.futura = null;
         toast("Salário salvo. O bot já usa esse líquido nas simulações.");
         estado.formRenda = null;
         return carregar();
@@ -596,7 +655,7 @@ app.addEventListener("input", (ev) => {
     b?.setSelectionRange(t.value.length, t.value.length);
     return;
   }
-  if (estado.rota === "renda" && (["bruto", "dep", "inss", "irrf"].includes(t.id) || t.dataset.descValor !== undefined || t.dataset.descNome !== undefined)) {
+  if (estado.rota === "renda" && (["bruto", "dep", "inss", "irrf"].includes(t.id) || t.dataset.descValor !== undefined || t.dataset.descNome !== undefined || t.dataset.descParc !== undefined)) {
     recalcularRenda();
   }
 });
