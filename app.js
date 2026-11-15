@@ -87,7 +87,7 @@ const EMOJI_CAT = {
   "Impostos e taxas": "🧾", "Presentes e doações": "🎁", "Salário": "💼", "Renda extra": "💸", "Reembolso": "↩️", "Rendimentos": "📈",
 };
 const TIPOS_FIXA = {
-  luz: ["Luz", "💡"], agua: ["Água", "💧"], internet: ["Internet", "🌐"], telefone: ["Telefone", "📱"],
+  luz: ["Luz", "💡"], agua: ["Água", "💧"], gas: ["Gás", "🔥"], internet: ["Internet", "🌐"], telefone: ["Telefone", "📱"],
   assinatura: ["Assinatura", "📺"], moradia: ["Moradia", "🏠"], outro: ["Outra", "📌"],
 };
 
