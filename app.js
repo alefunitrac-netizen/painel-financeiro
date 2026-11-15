@@ -220,7 +220,8 @@ function telaVisao(d) {
         <div><span class="valor-grande">${reais(g.total)}</span> ${g.limite ? `<span class="de">/ ${reais(g.limite)}</span>` : ""}</div>
         ${folga !== null && d.mesAtual ? `<div style="margin-top:8px"><span class="pilula ${folga >= 0 ? "verde" : "vermelha"}">${reais(Math.abs(folga))} ${folga >= 0 ? "abaixo" : "acima"} do ritmo</span></div>` : ""}
         ${graficoGastos(g)}
-        ${g.porDia !== null ? `<div class="sub" style="font-size:14px">Mantenha os gastos em até <b style="color:var(--texto)">${reais(g.porDia)}</b> por dia até o fim do mês</div>`
+        ${g.limite && g.total > g.limite ? `<div class="sub" style="font-size:14px">Você passou <b class="vermelho-txt">${reais(g.total - g.limite)}</b> do limite deste mês. Evite gastos fora do essencial até o mês virar.</div>`
+          : g.porDia !== null ? `<div class="sub" style="font-size:14px">Mantenha os gastos em até <b style="color:var(--texto)">${reais(g.porDia)}</b> por dia até o fim do mês</div>`
           : !g.limite ? `<div class="sub">Informe sua renda em <a href="#/renda">Renda</a> para ver seu limite do mês.</div>` : ""}
       </div>
       <div class="faixa">Limite = renda líquida − meta de investimento</div>
