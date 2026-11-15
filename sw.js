@@ -1,6 +1,6 @@
 // Guarda só a "casca" do app (páginas, estilo, ícones) para abrir rápido e sem internet.
 // Os dados financeiros nunca ficam em cache: vêm sempre da API.
-const CACHE = "painel-v4";
+const CACHE = "painel-v5";
 const CASCA = ["./", "index.html", "estilo.css", "app.js", "icone.svg", "icone-192.png", "manifest.webmanifest"];
 
 self.addEventListener("install", (e) => {

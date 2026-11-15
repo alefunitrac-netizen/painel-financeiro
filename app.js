@@ -2,6 +2,8 @@
 // além da chave da sessão, que o link do bot cria.
 const API = "https://henuvivpnmisntwvgjbu.supabase.co/functions/v1/painel-api";
 const CHAVE_SESSAO = "painel.sessao";
+/** Conta escolhida no filtro (só neste aparelho). Vazio = todas. */
+const CHAVE_CONTA = "painel.conta";
 const app = document.getElementById("app");
 
 // ---------- Utilidades ----------
@@ -191,7 +193,7 @@ function blocoRendaFutura(f, liquidoAgora) {
 }
 
 // ---------- Estado e navegação ----------
-const estado = { mes: null, dados: null, rota: "visao" };
+const estado = { mes: null, dados: null, rota: "visao", conta: guardar.ler(CHAVE_CONTA) || null };
 const ROTAS = {
   visao: ["Visão geral", "visao"],
   renda: ["Renda e contas fixas", "renda"],
@@ -228,6 +230,10 @@ function moldura(conteudo) {
       <div class="topo">
         <h1>${esc(titulo)}</h1>
         <div class="espaco"></div>
+        ${mostraMes ? `<select class="entrada seletor-conta" id="filtro-conta" aria-label="Conta">
+          <option value="">Todas as contas</option>
+          ${d.contas.filter((c) => c.id).map((c) => `<option value="${esc(c.id)}" ${d.contaFiltro === c.id ? "selected" : ""}>${c.tipo === "cartao_credito" ? "💳" : "🏦"} ${esc(c.nome)}</option>`).join("")}
+        </select>` : ""}
         ${mostraMes ? `<div class="seletor-mes">
           <button class="botao-icone" data-acao="mes-anterior" aria-label="Mês anterior">${icone("esq")}</button>
           <span>${esc(d.rotuloMes)}</span>
@@ -258,7 +264,7 @@ function telaVisao(d) {
   return `<div class="grade">
     <section class="cartao destaque c5">
       <div class="corpo">
-        <h2>Gastos no mês</h2>
+        <h2>Gastos no mês ${d.contaFiltro ? `<span class="pilula azul">só ${esc(d.contas.find((c) => c.id === d.contaFiltro)?.nome ?? "uma conta")}</span>` : ""}</h2>
         <div><span class="valor-grande">${reais(g.total)}</span> ${g.limite ? `<span class="de">/ ${reais(g.limite)}</span>` : ""}</div>
         ${folga !== null && d.mesAtual ? `<div style="margin-top:8px"><span class="pilula ${folga >= 0 ? "verde" : "vermelha"}">${reais(Math.abs(folga))} ${folga >= 0 ? "abaixo" : "acima"} do ritmo</span></div>` : ""}
         ${graficoGastos(g)}
@@ -495,7 +501,10 @@ function desenhar() {
 
 async function carregar() {
   try {
-    estado.dados = await api(`/resumo${estado.mes ? `?mes=${estado.mes}` : ""}`);
+    const q = new URLSearchParams();
+    if (estado.mes) q.set("mes", estado.mes);
+    if (estado.conta) q.set("conta", estado.conta);
+    estado.dados = await api(`/resumo${q.size ? `?${q}` : ""}`);
     desenhar();
   } catch (e) {
     if (e instanceof SemSessao) return telaEntrada(e.message);
@@ -636,6 +645,14 @@ app.addEventListener("click", async (ev) => {
     if (e instanceof SemSessao) return telaEntrada(e.message);
     toast(e.message);
   }
+});
+
+app.addEventListener("change", (ev) => {
+  if (ev.target.id !== "filtro-conta") return;
+  estado.conta = ev.target.value || null;
+  if (estado.conta) guardar.gravar(CHAVE_CONTA, estado.conta);
+  else guardar.apagar(CHAVE_CONTA);
+  carregar();
 });
 
 app.addEventListener("input", (ev) => {

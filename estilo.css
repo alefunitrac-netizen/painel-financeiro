@@ -76,6 +76,7 @@ a { color: var(--azul); }
 .botao-icone svg { width: 18px; height: 18px; }
 
 .abas-celular { display: none; }
+.seletor-conta { width: auto; max-width: 240px; height: 44px; border-radius: 12px; font-weight: 500; font-size: 14px; }
 
 /* ---------- Grade de cartões ---------- */
 .grade { display: grid; grid-template-columns: repeat(12, 1fr); gap: 20px; }
@@ -174,6 +175,7 @@ input[type=range] { width: 100%; accent-color: var(--azul); }
   .topo { flex-wrap: wrap; margin-bottom: 16px; }
   .topo h1 { font-size: 20px; }
   .seletor-mes span { min-width: 104px; }
+  .seletor-conta { order: 3; max-width: none; flex: 1 1 100%; }
   .grade { gap: 14px; }
   .c4, .c5, .c6, .c7, .c8, .c12 { grid-column: span 12; }
   .cartao { padding: 18px; }
